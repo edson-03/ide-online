@@ -3,7 +3,8 @@
 // interrompido com worker.terminate() (ver python.js).
 //
 // Protocolo:
-//   IDE -> worker: { type: 'run', files: [{ name, content }], entry }
+//   IDE -> worker: { type: 'preload' }  (carrega o runtime em segundo plano, sem responder)
+//                  { type: 'run', files: [{ name, content }], entry }
 //                  { type: 'input-reply', value }  (resposta a um input())
 //   worker -> IDE: { type: 'status', state: 'loading' | 'running' }
 //                  { type: 'batch', lines: [{ level, text }], dropped }  (saída agrupada)
@@ -70,6 +71,7 @@ def _ide_run(entry):
 `;
 
 let pyodidePromise = null;
+let runtimeReady = false;
 let pendingInput = null; // resolve() do input() aguardando resposta
 
 // stdout com buffer de linha próprio: o modo "batched" do Pyodide segura a
@@ -119,7 +121,6 @@ function post(type, payload = {}) {
 function loadRuntime() {
   if (!pyodidePromise) {
     pyodidePromise = (async () => {
-      post('status', { state: 'loading' });
       // Pyodide 314+ só funciona em module worker (não aceita importScripts).
       // import() dinâmico para que falhas de rede caiam no catch abaixo.
       const { loadPyodide } = await import(`${PYODIDE_URL}pyodide.mjs`);
@@ -129,7 +130,7 @@ function loadRuntime() {
       pyodide.setStderr({ batched: (text) => { flushStdout(); post('stderr', { text }); } });
       pyodide.globals.set('_ide_request_input', requestInput);
       pyodide.runPython(SETUP);
-      post('status', { state: 'running' });
+      runtimeReady = true;
       return pyodide;
     })();
     // Permite tentar de novo na próxima execução se o carregamento falhar.
@@ -158,11 +159,19 @@ self.onmessage = async (e) => {
     resolve?.(String(value));
     return;
   }
+  // Pré-carregamento (modo Python aberto): sem status nem mensagens; erros ficam para a execução.
+  if (type === 'preload') {
+    loadRuntime().catch(() => {});
+    return;
+  }
   if (type !== 'run') return;
 
   let pyodide;
   try {
+    // Runtime ainda não pronto (1ª vez ou pré-carregamento em andamento): avisa a espera.
+    if (!runtimeReady) post('status', { state: 'loading' });
     pyodide = await loadRuntime();
+    post('status', { state: 'running' });
   } catch (err) {
     post('fatal', { text: `Runtime Python indisponível. Verifique sua conexão com a internet e tente de novo. (${err.message})` });
     post('done', { ok: false });

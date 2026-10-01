@@ -4,6 +4,7 @@
 // arquivos ("./util.js") são reescritos para a blob URL correspondente.
 // O worker não tem DOM nem acesso à interface da IDE; a comunicação é via postMessage.
 // Um loop infinito não trava a IDE: Parar encerra o worker.
+// prompt() existe, mas é assíncrono (await prompt('...')); alert/confirm e DOM não.
 
 import { FMT_SOURCE } from './fmt-source.js';
 
@@ -29,7 +30,28 @@ self.addEventListener('unhandledrejection', (e) => {
   e.preventDefault();
   send({ type: 'error', text: 'Promise rejeitada sem tratamento: ' + describe(e.reason), stack: e.reason?.stack });
 });
+// prompt(): pede um texto no console da IDE. O worker não pode pausar esperando o usuário,
+// então o resultado é uma Promise: const nome = await prompt('Seu nome: ').
+// Usar o resultado sem await (concatenar, converter em número) gera um erro explicativo.
+class PromptResult extends Promise {
+  [Symbol.toPrimitive]() {
+    throw new TypeError('prompt() precisa de await no modo JavaScript: const nome = await prompt("Seu nome: ")');
+  }
+}
+const inputWaits = new Map(); // id -> resolve
+let inputSeq = 0;
+self.prompt = (message = '') => {
+  const id = ++inputSeq;
+  send({ type: 'input', id, prompt: String(message) });
+  return new PromptResult((resolve) => inputWaits.set(id, resolve));
+};
 self.onmessage = async (e) => {
+  if (e.data.type === 'input-reply') {
+    const resolve = inputWaits.get(e.data.id);
+    inputWaits.delete(e.data.id);
+    resolve?.(e.data.value);
+    return;
+  }
   try {
     await import(e.data.entry);
     send({ type: 'done', ok: true });
@@ -72,7 +94,8 @@ function buildModules(files) {
 }
 
 // onOutput(level, text): erro ou aviso avulso. onBatch(lines, dropped): saída agrupada do console.
-export function createJsRunner({ onOutput, onBatch }) {
+// onInput(prompt): Promise<string> com a resposta a um prompt() do programa.
+export function createJsRunner({ onOutput, onBatch, onInput }) {
   let worker = null;
   let urls = new Map();
   let pending = null;
@@ -128,6 +151,13 @@ export function createJsRunner({ onOutput, onBatch }) {
         const loc = locate(msg.stack, msg.url, msg.line);
         onOutput('error', loc ? `${msg.text} (${loc.file}, linha ${loc.line})` : msg.text);
       } else if (msg.type === 'done') finish(msg.ok);
+      else if (msg.type === 'input') {
+        // onInput(prompt) -> Promise<string> com o texto digitado.
+        onInput(msg.prompt).then((value) => {
+          // Ignora a resposta se a execução foi interrompida enquanto esperava.
+          if (worker === w) w.postMessage({ type: 'input-reply', id: msg.id, value });
+        });
+      }
     };
     w.onerror = (e) => {
       e.preventDefault();
@@ -138,7 +168,7 @@ export function createJsRunner({ onOutput, onBatch }) {
 
     return new Promise((resolve) => {
       pending = { resolve };
-      w.postMessage({ entry: urls.get(entry) });
+      w.postMessage({ type: 'run', entry: urls.get(entry) });
     });
   }
 

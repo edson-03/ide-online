@@ -105,9 +105,19 @@ O nome precisa ser único no modo e não pode ter `/ \ : * ? " < > |`. Não há 
 
 **Executar** roda o `main.js` (ou o primeiro `.js`) sem página; a saída vai para o console. Os arquivos são módulos ES: `import { f } from './util.js'` funciona entre arquivos do projeto. Erros mostram arquivo e linha, por exemplo `(main.js, linha 3)`. O programa continua vivo depois de terminar o `main.js` (timers, promises) até **Parar** ou uma nova execução; um loop infinito não trava a IDE.
 
+`prompt()` abre um campo de texto no console, mas exige `await`, porque o código roda num worker que não pode pausar esperando o usuário:
+
+```js
+const nome = await prompt('Seu nome: ');
+const idade = Number(await prompt('Idade: '));
+console.log(`Olá, ${nome}! Ano que vem: ${idade + 1}`);
+```
+
+Funciona direto no `main.js` (os arquivos são módulos, que aceitam `await` fora de função) e dentro de funções `async`. Sem `await`, usar o valor (concatenar, converter em número) gera um erro explicando o que falta.
+
 ### Python
 
-**Executar** roda o `main.py` (ou o primeiro `.py`, se não houver `main.py`). Nesse modo, o painel da direita mostra só o console. A primeira execução baixa o runtime (~10 MB) e leva alguns segundos; as próximas são imediatas. `print` aparece no console; exceções aparecem com o traceback, indicando arquivo e linha.
+**Executar** roda o `main.py` (ou o primeiro `.py`, se não houver `main.py`). Nesse modo, o painel da direita mostra só o console. O runtime (~10 MB) começa a ser baixado em segundo plano assim que o modo Python é aberto; se você executar antes de ele terminar, a execução espera (alguns segundos, mais no celular). As próximas execuções são imediatas. O download só acontece no modo Python. `print` aparece no console; exceções aparecem com o traceback, indicando arquivo e linha.
 
 Todos os arquivos do modo Python são gravados numa pasta antes de cada execução, então `import util` (para um `util.py` do projeto) e `open("dados.csv")` funcionam. Um módulo editado é reimportado na execução seguinte.
 
@@ -138,7 +148,7 @@ Todas carregadas por CDN, sem instalação:
 - **`input()` em Python depende de JSPI**, um recurso que o Pyodide ainda marca como experimental. Funciona no Chrome e no Edge recentes. Em navegadores sem JSPI (no momento, provavelmente Safari e talvez Firefox), `input()` lança um erro explicativo.
 - **Não há formatação para Python** (nem para `.txt`, `.csv`, `.json`). O botão fica desabilitado nesses arquivos.
 - **Sem subpastas.** Ao importar um `.zip`, os arquivos de subpastas entram pelo nome, sem a pasta. Extensões fora da lista são ignoradas, com aviso no console. Limite de 1 MB por arquivo.
-- **Modo JavaScript sem `prompt()`, `alert()` e DOM** (não há janela no worker). Pacotes npm (`import 'lodash'`) não estão disponíveis; só imports relativos entre arquivos do projeto, sem importação circular.
+- **Modo JavaScript sem `alert()`, `confirm()` e DOM** (não há janela no worker), e `prompt()` só com `await`. Pacotes npm (`import 'lodash'`) não estão disponíveis; só imports relativos entre arquivos do projeto, sem importação circular.
 - **Erro de sintaxe no modo JavaScript aparece sem número de linha.** O navegador não informa a posição de erros de sintaxe em módulos carregados por `import()`. Erros em tempo de execução mostram arquivo e linha.
 - **Só três linguagens.** Java, C, C++, PHP etc. exigiriam um runtime WebAssembly próprio para cada uma ou um servidor; por isso não aparecem na tela de escolha.
 - **Uma página por vez no preview.** Links entre páginas `.html` do projeto não navegam no Preview.
@@ -149,7 +159,7 @@ Todas carregadas por CDN, sem instalação:
 - **Não funciona offline**, porque as bibliotecas vêm de CDN.
 - **Um projeto por navegador**: o salvamento automático guarda um único projeto no `localStorage` deste navegador.
 - **O console guarda as últimas 1000 linhas.** Quando um programa imprime mais rápido do que dá para exibir (ex.: `while True: print(i)`), a saída é enviada em lotes e parte das linhas é omitida, com aviso `… N linhas omitidas`. Assim a IDE continua respondendo e o Parar funciona.
-- O Parar do Python encerra o worker; a próxima execução recarrega o runtime (alguns segundos).
+- O Parar do Python encerra o worker e descarta o runtime; ele é recarregado em segundo plano logo em seguida (alguns segundos).
 
 ## Testes manuais
 

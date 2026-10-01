@@ -8,6 +8,7 @@ export const FMT_SOURCE = `
     if (typeof v === 'function') return v.toString();
     if (typeof v === 'symbol' || typeof v === 'bigint') return v.toString();
     if (v instanceof Error) return v.name + ': ' + v.message;
+    if (v instanceof Promise) return 'Promise (use await para obter o valor)';
     if (typeof Node !== 'undefined' && v instanceof Node) {
       return v.nodeType === 1 ? '<' + v.tagName.toLowerCase() + '>' : v.nodeName;
     }

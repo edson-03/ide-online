@@ -5,6 +5,7 @@
 export function createPython({ onOutput, onBatch, onStatus, onInput }) {
   let worker = null;
   let pending = null; // { resolve } da execução em andamento
+  let preloaded = false; // o worker atual já recebeu o pedido de pré-carregamento
 
   function spawn() {
     const w = new Worker(new URL('./py-worker.js', import.meta.url), { type: 'module' });
@@ -48,6 +49,16 @@ export function createPython({ onOutput, onBatch, onStatus, onInput }) {
   function kill() {
     if (worker) worker.terminate();
     worker = null;
+    preloaded = false;
+  }
+
+  // Começa a baixar e iniciar o runtime em segundo plano, para a 1ª execução não esperar.
+  // Falhas são ignoradas aqui: a execução tenta de novo e mostra o erro.
+  function preload() {
+    if (preloaded) return;
+    if (!worker) spawn();
+    preloaded = true;
+    worker.postMessage({ type: 'preload' });
   }
 
   // files: [{ name, content }] do modo Python; entry: arquivo a executar (ex.: main.py).
@@ -62,7 +73,7 @@ export function createPython({ onOutput, onBatch, onStatus, onInput }) {
     });
   }
 
-  // Interrompe a execução encerrando o worker. O runtime é recarregado na próxima execução.
+  // Interrompe a execução encerrando o worker. O runtime precisa ser carregado de novo (ver preload).
   function stop() {
     if (!pending) return false;
     kill();
@@ -73,6 +84,7 @@ export function createPython({ onOutput, onBatch, onStatus, onInput }) {
   return {
     run,
     stop,
+    preload,
     get busy() { return pending !== null; },
   };
 }

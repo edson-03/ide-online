@@ -105,8 +105,14 @@ function refreshUI() {
   // Fora do modo web o preview fica oculto: encerra para os timers não escreverem no console.
   if (mode !== 'web' && previewActive) stopPreview();
   // Trocou de linguagem: a saída da anterior não vale mais (exceto Python ainda rodando).
-  if (shownMode && shownMode !== mode && !python.busy) ideConsole.clear();
+  if (shownMode && shownMode !== mode) {
+    if (!python.busy) ideConsole.clear();
+    // Cada linguagem tem seus próprios arquivos: deixa claro que nada foi perdido.
+    ideConsole.info(`Mostrando os arquivos de ${MODES[mode].label}. Seu código ${MODES[shownMode].label} continua salvo: escolha ${MODES[shownMode].label} de novo para voltar a ele.`);
+  }
   shownMode = mode;
+  // Modo Python aberto: já carrega o runtime (~10 MB) para a 1ª execução não esperar.
+  if (mode === 'python') python.preload();
   updateRun();
   updateStop();
 }
@@ -236,6 +242,13 @@ const python = createPython({
 const jsRunner = createJsRunner({
   onOutput: (level, text) => ideConsole.write(level, [text], 'js'),
   onBatch: (lines, dropped) => ideConsole.writeBatch(lines, 'js', dropped),
+  onInput: async (promptText) => {
+    setConsoleOpen(true);
+    setStatus('input');
+    const value = await ideConsole.prompt(promptText, 'js');
+    setStatus(jsRunner.busy ? 'running' : 'ready');
+    return value;
+  },
 });
 
 let stoppedByUser = false;
@@ -294,9 +307,12 @@ async function runNode() {
   ideConsole.info(entry.name === 'main.js' ? 'Executando main.js…' : `main.js não encontrado. Executando ${entry.name}…`);
   setStatus('running');
   jsStoppedByUser = false;
+  ideConsole.cancelPrompt(); // prompt() pendente da execução anterior
   const run = jsRunner.run(files, entry.name);
   updateStop();
   const ok = await run;
+  // Erro no main.js: um prompt() que ficou aberto não tem mais quem use a resposta.
+  if (!ok && !jsRunner.busy && !python.busy) ideConsole.cancelPrompt();
   // Se uma nova execução já começou, ela cuida do status.
   if (!jsRunner.busy && !python.busy) setStatus(ok || jsStoppedByUser ? 'ready' : 'error');
   updateStop();
@@ -329,6 +345,8 @@ function stopPython() {
   stoppedByUser = true;
   python.stop();
   ideConsole.cancelPrompt();
+  // Parar descarta o runtime: recarrega já, em segundo plano, se o usuário segue no Python.
+  if (project.mode === 'python') python.preload();
 }
 
 // Uma execução por vez: encerra o que estiver rodando nos outros modos.
@@ -340,6 +358,7 @@ function stopOthers(mode) {
   if (mode !== 'node' && jsRunner.active) {
     jsStoppedByUser = true;
     jsRunner.stop();
+    ideConsole.cancelPrompt();
   }
   if (mode !== 'web' && previewActive) stopPreview();
   updateRun();
@@ -364,10 +383,11 @@ $('btn-refresh').addEventListener('click', () => {
 btnStop.addEventListener('click', () => {
   if (python.busy) {
     stopPython();
-    ideConsole.warn('Execução Python interrompida. O runtime será recarregado na próxima execução.');
+    ideConsole.warn('Execução Python interrompida. O runtime está sendo recarregado em segundo plano.');
   } else if (jsRunner.active && (project.mode === 'node' || !previewActive)) {
     jsStoppedByUser = true;
     jsRunner.stop();
+    ideConsole.cancelPrompt();
     setStatus('ready');
     ideConsole.warn('Execução JavaScript interrompida.');
   } else if (previewActive) {
@@ -433,7 +453,10 @@ $('btn-new').addEventListener('click', async () => {
   const label = MODES[project.mode].label;
   if (!await askConfirm(`Restaurar o exemplo de ${label}? Todos os arquivos ${label} atuais serão apagados.`, { ok: 'Restaurar', danger: true })) return;
   if (project.mode === 'python' && python.busy) stopPython();
-  if (project.mode === 'node') jsRunner.stop();
+  if (project.mode === 'node') {
+    jsRunner.stop();
+    ideConsole.cancelPrompt();
+  }
   if (project.mode === 'web') stopPreview();
   updateRun();
   updateStop();
