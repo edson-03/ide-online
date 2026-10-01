@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-mode="web">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IDE Online</title>
+  <!-- Aplica o tema salvo antes de desenhar a página (evita piscar o tema claro). Ver js/storage.js. -->
+  <script>
+    try { if (JSON.parse(localStorage.getItem('ide-online:v1')).theme === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+  </script>
+  <!-- CodeMirror 5 (editor de código). Usado em js/editor.js.
+       Se o CDN falhar, o editor cai para <textarea> simples. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Ícones SVG reutilizados com <use href="#i-...">. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></symbol>
+      <symbol id="i-format" viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M8 14h12M4 18h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M8 20h12M4.7 14.3l9.6-9.6a1.8 1.8 0 0 1 2.5 0l3.5 3.5a1.8 1.8 0 0 1 0 2.5L12 19H8.4l-3.7-3.7a.7.7 0 0 1 0-1zM9.5 9.5l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-files" viewBox="0 0 24 24"><path d="M14 3H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8zM14 3v5h5M3 8v12a2 2 0 0 0 2 2h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-file-plus" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-zip" viewBox="0 0 24 24"><path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM3 3h18v4H3zM10 11h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">&lt;/&gt;</span>
+      <span class="brand-name">IDE Online</span>
+    </div>
+
+    <div class="run-group">
+      <button id="btn-lang" class="lang-btn" title="Escolher linguagem" aria-haspopup="dialog">
+        <span class="lang-btn-icon" id="lang-btn-icon"></span>
+        <span class="lang-btn-name" id="lang-btn-name">HTML/CSS/JS</span>
+        <svg class="icon chevron-down"><use href="#i-chevron"/></svg>
+      </button>
+      <button id="btn-run" class="btn run" title="Executar (Ctrl+Enter)">
+        <span class="label">Executar</span><svg class="icon"><use href="#i-play"/></svg>
+      </button>
+      <button id="btn-stop" class="btn" title="Parar execução" disabled>
+        <svg class="icon"><use href="#i-stop"/></svg><span class="label">Parar</span>
+      </button>
+    </div>
+
+    <div class="actions">
+      <button id="btn-format" class="icon-btn" title="Formatar (Shift+Alt+F)" aria-label="Formatar">
+        <svg class="icon"><use href="#i-format"/></svg>
+      </button>
+      <button id="btn-download" class="icon-btn" title="Baixar arquivo atual" aria-label="Baixar arquivo atual">
+        <svg class="icon"><use href="#i-download"/></svg>
+      </button>
+      <button id="btn-clear" class="icon-btn" title="Limpar arquivo atual" aria-label="Limpar arquivo atual">
+        <svg class="icon"><use href="#i-eraser"/></svg>
+      </button>
+      <button id="btn-new" class="icon-btn" title="Restaurar o exemplo desta linguagem" aria-label="Restaurar exemplo">
+        <svg class="icon"><use href="#i-reset"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <nav class="activitybar" aria-label="Barra lateral">
+      <button id="btn-explorer" class="activity-btn active" title="Explorer" aria-label="Mostrar/ocultar explorer" aria-pressed="true">
+        <svg class="icon"><use href="#i-files"/></svg>
+      </button>
+    </nav>
+
+    <aside class="explorer" id="explorer" aria-label="Arquivos">
+      <div class="explorer-header">
+        <span>Explorer</span>
+        <span class="explorer-actions">
+          <button id="btn-file-new" class="icon-btn tiny" title="Novo arquivo" aria-label="Novo arquivo"><svg class="icon"><use href="#i-file-plus"/></svg></button>
+          <button id="btn-import" class="icon-btn tiny" title="Importar arquivos ou .zip" aria-label="Importar arquivos"><svg class="icon"><use href="#i-upload"/></svg></button>
+          <button id="btn-zip" class="icon-btn tiny" title="Baixar projeto (.zip)" aria-label="Baixar projeto em .zip"><svg class="icon"><use href="#i-zip"/></svg></button>
+        </span>
+        <input type="file" id="import-input" multiple hidden
+               accept=".html,.css,.js,.py,.txt,.csv,.json,.zip">
+      </div>
+      <ul class="file-list" id="file-list"></ul>
+      <p class="explorer-hint" id="explorer-hint"></p>
+    </aside>
+
+    <div class="split" id="split">
+      <section class="pane editor-pane" aria-label="Editor">
+        <div class="file-tabs" id="file-tabs" role="tablist" aria-label="Arquivos abertos"></div>
+        <div class="editor-host" id="editor-host"></div>
+      </section>
+
+      <div class="gutter gutter-v" id="gutter-v" role="separator" aria-orientation="vertical"></div>
+
+      <section class="pane preview-pane" id="preview-pane" aria-label="Resultado">
+        <div class="pane-tabs">
+          <span class="pane-tab active"><svg class="icon"><use href="#i-eye"/></svg>Preview</span>
+          <button id="btn-refresh" class="icon-btn small" title="Recarregar preview (HTML/CSS/JS)" aria-label="Recarregar preview">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+        <div class="preview-host" id="preview-host">
+          <div class="preview-empty" id="preview-empty"><span>Clique em <strong>Executar</strong> para ver o resultado.</span></div>
+        </div>
+
+        <div class="gutter gutter-h" id="gutter-h" role="separator" aria-orientation="horizontal"></div>
+
+        <section class="console-pane" id="console-pane" aria-label="Console">
+          <div class="console-header">
+            <button id="btn-console-toggle" class="console-toggle" aria-expanded="true">
+              <svg class="icon chevron"><use href="#i-chevron"/></svg>
+              Console <span class="console-count" id="console-count"></span>
+            </button>
+            <button id="btn-console-clear" class="icon-btn small" title="Limpar console" aria-label="Limpar console">
+              <svg class="icon"><use href="#i-trash"/></svg>
+            </button>
+          </div>
+          <div class="console-output" id="console-output" aria-live="polite"></div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="lang-dialog" class="lang-dialog" aria-labelledby="lang-title">
+    <div class="lang-head">
+      <h2 id="lang-title">Escolha uma linguagem para começar.</h2>
+      <button class="icon-btn" data-close title="Fechar (Esc)" aria-label="Fechar"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <label class="lang-search">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input type="search" placeholder="Pesquisar linguagens..." aria-label="Pesquisar linguagens" autocomplete="off">
+    </label>
+    <div class="lang-groups"></div>
+    <p class="lang-empty" hidden>Nenhuma linguagem encontrada. Disponíveis: Python, JavaScript e HTML/CSS/JS.</p>
+  </dialog>
+
+  <footer class="statusbar">
+    <div id="status" class="status" data-state="ready">Pronto</div>
+    <button id="btn-theme" class="statusbar-btn" title="Alternar tema claro/escuro">
+      <svg class="icon"><use href="#i-sun"/></svg><span>Claro</span>
+    </button>
+  </footer>
+
+  <!-- Scripts clássicos rodam antes do módulo (módulos são deferidos). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/jump-to-line.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
