@@ -4,17 +4,20 @@
 // arquivos ("./util.js") são reescritos para a blob URL correspondente.
 // O worker não tem DOM nem acesso à interface da IDE; a comunicação é via postMessage.
 // Um loop infinito não trava a IDE: Parar encerra o worker.
-// prompt() existe, mas é assíncrono (await prompt('...')); alert/confirm e DOM não.
+// prompt() existe (síncrono com o service worker; senão, com await); alert/confirm e DOM não.
 
 import { FMT_SOURCE } from './fmt-source.js';
+import { answerInput } from './sync-input.js';
 
 // URL absoluta: o código de partida roda numa blob URL, onde caminhos relativos não funcionam.
 const OUT_BATCH_URL = new URL('./out-batch.js', import.meta.url).href;
+const SYNC_INPUT_URL = new URL('./sync-input.js', import.meta.url).href;
 
 // Código de partida do worker: redireciona console/erros e importa o arquivo de entrada.
 // A saída do console vai agrupada (out-batch.js); erros e o fim enviam antes o que está pendente.
 const BOOT = `
 import { createBatcher } from '${OUT_BATCH_URL}';
+import { canWaitSync, waitInput } from '${SYNC_INPUT_URL}';
 ${FMT_SOURCE}
 const batcher = createBatcher((msg) => postMessage(msg));
 const send = (msg) => { batcher.flush(); postMessage(msg); };
@@ -30,9 +33,10 @@ self.addEventListener('unhandledrejection', (e) => {
   e.preventDefault();
   send({ type: 'error', text: 'Promise rejeitada sem tratamento: ' + describe(e.reason), stack: e.reason?.stack });
 });
-// prompt(): pede um texto no console da IDE. O worker não pode pausar esperando o usuário,
-// então o resultado é uma Promise: const nome = await prompt('Seu nome: ').
-// Usar o resultado sem await (concatenar, converter em número) gera um erro explicativo.
+// prompt(): pede um texto no console da IDE. Com o service worker ativo (sync-input.js),
+// o worker para e espera, como o prompt() do navegador. Sem ele, o resultado é uma
+// Promise (const nome = await prompt('Seu nome: ')), e usar o resultado sem await
+// (concatenar, converter em número) gera um erro explicativo.
 class PromptResult extends Promise {
   [Symbol.toPrimitive]() {
     throw new TypeError('prompt() precisa de await no modo JavaScript: const nome = await prompt("Seu nome: ")');
@@ -41,6 +45,11 @@ class PromptResult extends Promise {
 const inputWaits = new Map(); // id -> resolve
 let inputSeq = 0;
 self.prompt = (message = '') => {
+  if (canWaitSync()) {
+    const id = crypto.randomUUID();
+    send({ type: 'input', id, prompt: String(message), sync: true });
+    return waitInput(id);
+  }
   const id = ++inputSeq;
   send({ type: 'input', id, prompt: String(message) });
   return new PromptResult((resolve) => inputWaits.set(id, resolve));
@@ -155,7 +164,10 @@ export function createJsRunner({ onOutput, onBatch, onInput }) {
         // onInput(prompt) -> Promise<string> com o texto digitado.
         onInput(msg.prompt).then((value) => {
           // Ignora a resposta se a execução foi interrompida enquanto esperava.
-          if (worker === w) w.postMessage({ type: 'input-reply', id: msg.id, value });
+          if (worker !== w) return;
+          // sync: o worker está parado esperando o service worker; senão, responde direto.
+          if (msg.sync) answerInput(msg.id, value);
+          else w.postMessage({ type: 'input-reply', id: msg.id, value });
         });
       }
     };

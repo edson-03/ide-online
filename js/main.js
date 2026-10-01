@@ -42,6 +42,10 @@ const ideConsole = createConsole($('console-output'), {
 });
 $('btn-console-clear').addEventListener('click', ideConsole.clear);
 
+// Service worker (sw.js): deixa prompt()/input() esperarem de forma síncrona nos workers.
+// Só existe em localhost/HTTPS; sem ele, prompt() exige await e input() depende de JSPI.
+navigator.serviceWorker?.register('sw.js').catch(() => {});
+
 // Restaura o último projeto (ou cria o exemplo padrão).
 const saved = loadState();
 const project = createProject(saved);

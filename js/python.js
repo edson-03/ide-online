@@ -1,6 +1,8 @@
 // Cliente do worker Python (py-worker.js).
 // O runtime é carregado sob demanda, na primeira execução Python.
 
+import { answerInput } from './sync-input.js';
+
 // onOutput(level, text): mensagem avulsa. onBatch(lines, dropped): saída agrupada do programa.
 export function createPython({ onOutput, onBatch, onStatus, onInput }) {
   let worker = null;
@@ -25,7 +27,9 @@ export function createPython({ onOutput, onBatch, onStatus, onInput }) {
             // Ignora a resposta se a execução foi interrompida enquanto esperava.
             if (worker !== w) return;
             onStatus('running');
-            w.postMessage({ type: 'input-reply', value });
+            // sync: o worker está parado esperando o service worker; senão, responde direto.
+            if (msg.sync) answerInput(msg.id, value);
+            else w.postMessage({ type: 'input-reply', value });
           });
           break;
       }

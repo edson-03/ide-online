@@ -11,6 +11,7 @@ IDE no navegador para HTML/CSS/JS (preview), JavaScript puro (console, tipo Node
 - **Nada de `alert`/`confirm`/`prompt` nativos na IDE**: use `askConfirm()` de `js/confirm.js` (diálogo centralizado).
 - **Saída de programas sempre agrupada** (`js/out-batch.js`): workers e script-ponte do preview usam `createBatcher`. Sem isso, um loop de `print` congela a IDE. Quando estoura, descarta as linhas mais **antigas**.
 - **Uma execução por vez**: Executar encerra o que roda nos outros modos (`stopOthers` em `main.js`); trocar de linguagem encerra o preview e limpa o console (exceto com Python rodando).
+- **Entrada síncrona** (`prompt()` no modo JavaScript, `input()` do Python sem JSPI): o worker faz XHR síncrono para `__ide_input__` e o `sw.js` segura a resposta até a IDE enviar o texto (`js/sync-input.js`). O `sw.js` não intercepta nem guarda em cache mais nada. Sem service worker (fora de localhost/HTTPS), `prompt()` cai para a versão com `await`.
 - **Runtime Python pré-carregado** (`python.preload()`) ao abrir o modo Python e logo após Parar; nunca nos outros modos (dados móveis). O pré-carregamento não muda o status da IDE.
 - Mudanças pequenas e focadas; manter o estilo do código ao redor. Atualizar o README quando mudar comportamento, atalho ou limitação.
 

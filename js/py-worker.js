@@ -8,11 +8,13 @@
 //                  { type: 'input-reply', value }  (resposta a um input())
 //   worker -> IDE: { type: 'status', state: 'loading' | 'running' }
 //                  { type: 'batch', lines: [{ level, text }], dropped }  (saída agrupada)
-//                  { type: 'input', prompt }        (input() aguardando o usuário)
+//                  { type: 'input', prompt, id?, sync? }  (input() aguardando o usuário;
+//                                    sync: responder pelo service worker, ver sync-input.js)
 //                  { type: 'done', ok }
 //                  { type: 'fatal', text }   (runtime não pôde ser carregado)
 
 import { createBatcher } from './out-batch.js';
+import { canWaitSync, waitInput } from './sync-input.js';
 
 const PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
 
@@ -25,7 +27,8 @@ const PROJECT_DIR = '/home/pyodide/projeto';
 //
 // input(): o Python pausa com run_sync() até a IDE responder. Isso usa JSPI
 // (JavaScript Promise Integration do WebAssembly), disponível no Chrome/Edge
-// recentes. Sem JSPI, input() lança um erro explicativo.
+// recentes. Sem JSPI, espera pelo service worker (sync-input.js); sem os dois,
+// input() lança um erro explicativo.
 const SETUP = `
 import builtins, importlib, os, sys, traceback
 from pyodide.ffi import can_run_sync, run_sync
@@ -33,11 +36,14 @@ from pyodide.ffi import can_run_sync, run_sync
 _PROJECT_DIR = '${PROJECT_DIR}'
 
 def _ide_input(prompt=''):
-    if not can_run_sync():
-        raise RuntimeError("input() não é suportado neste navegador (requer JSPI, disponível no Chrome e no Edge recentes). Defina os valores direto no código.")
     # Envia ao JS a saída pendente (ex.: print(..., end='')); ela aparece antes do prompt.
     sys.stdout.flush()
-    return run_sync(_ide_request_input(str(prompt)))
+    if can_run_sync():
+        return run_sync(_ide_request_input(str(prompt)))
+    # Sem JSPI: espera síncrona pelo service worker (sync-input.js).
+    if _ide_can_wait_sync():
+        return _ide_wait_input(str(prompt))
+    raise RuntimeError("input() não é suportado neste navegador. Use o Chrome ou o Edge, ou abra a IDE por localhost. Enquanto isso, defina os valores direto no código.")
 
 builtins.input = _ide_input
 
@@ -102,6 +108,14 @@ function requestInput(prompt) {
   });
 }
 
+// Sem JSPI: o worker fica parado até a IDE responder via service worker.
+function waitInputSync(prompt) {
+  const id = crypto.randomUUID();
+  post('input', { prompt: stdoutPartial + prompt, id, sync: true });
+  stdoutPartial = '';
+  return waitInput(id);
+}
+
 const hasJSPI = typeof WebAssembly.Suspending === 'function';
 
 // Saída do programa vai agrupada (ver out-batch.js); o resto sai na hora,
@@ -129,6 +143,8 @@ function loadRuntime() {
       pyodide.setStdout({ write: writeStdout, isatty: true });
       pyodide.setStderr({ batched: (text) => { flushStdout(); post('stderr', { text }); } });
       pyodide.globals.set('_ide_request_input', requestInput);
+      pyodide.globals.set('_ide_can_wait_sync', canWaitSync);
+      pyodide.globals.set('_ide_wait_input', waitInputSync);
       pyodide.runPython(SETUP);
       runtimeReady = true;
       return pyodide;
