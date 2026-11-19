@@ -1,4 +1,4 @@
-// Modelo do projeto: arquivos de cada modo (web / python), abas abertas e arquivo ativo.
+// Modelo do projeto: arquivos de cada modo (web / python / node / sql), abas abertas e arquivo ativo.
 // Não mexe no DOM: a interface escuta as mudanças via onChange.
 
 // output: onde o resultado aparece (preview = página no iframe; console = só texto).
@@ -6,9 +6,10 @@ export const MODES = {
   web: { label: 'HTML/CSS/JS', exts: ['html', 'css', 'js'], newExt: 'js', output: 'preview' },
   python: { label: 'Python', exts: ['py', 'txt', 'csv', 'json'], newExt: 'py', output: 'console' },
   node: { label: 'JavaScript', exts: ['js'], newExt: 'js', output: 'console' },
+  sql: { label: 'SQL', exts: ['sql'], newExt: 'sql', output: 'console' },
 };
 
-const EXT_LANG = { html: 'html', css: 'css', js: 'js', py: 'python', txt: 'text', csv: 'text', json: 'json' };
+const EXT_LANG = { html: 'html', css: 'css', js: 'js', py: 'python', txt: 'text', csv: 'text', json: 'json', sql: 'sql' };
 
 export const extOf = (name) => (name.includes('.') ? name.split('.').pop().toLowerCase() : '');
 export const langOf = (name) => EXT_LANG[extOf(name)] ?? 'text';
@@ -93,6 +94,27 @@ for (let i = 0; i < 3; i++) {
 print(saudacao("mundo"))
 for i in range(3):
     print("linha", i)
+`,
+    },
+  ],
+  sql: [
+    {
+      name: 'main.sql',
+      content: `-- SQLite: cada execução começa com um banco vazio.
+CREATE TABLE alunos (
+  id INTEGER PRIMARY KEY,
+  nome TEXT NOT NULL,
+  nota REAL
+);
+
+INSERT INTO alunos (nome, nota) VALUES
+  ('Ana', 9.5),
+  ('Bruno', 7.0),
+  ('Carla', 8.2);
+
+SELECT nome, nota FROM alunos ORDER BY nota DESC;
+
+SELECT COUNT(*) AS total, ROUND(AVG(nota), 2) AS media FROM alunos;
 `,
     },
   ],

@@ -4,8 +4,8 @@ IDE no navegador para HTML/CSS/JS (preview), JavaScript puro (console, tipo Node
 
 ## Regras do projeto
 
-- **Sem build**: HTML + CSS + JS puro com módulos ES. Bibliotecas só via CDN, com versão fixa (CodeMirror 5.65.16, Pyodide 314.0.7, Prettier 3.9.9, JSZip 3.10.1). Não trocar biblioteca nem adicionar dependência sem perguntar.
-- **Isolamento**: o preview roda em `iframe sandbox="allow-scripts allow-modals allow-forms"`, **nunca** com `allow-same-origin`. A IDE só aceita `postMessage` do iframe atual. Python e o modo JavaScript rodam em Web Workers. A saída do usuário entra no DOM só com `textContent`.
+- **Sem build**: HTML + CSS + JS puro com módulos ES. Bibliotecas só via CDN, com versão fixa (CodeMirror 5.65.16, Pyodide 314.0.7, Prettier 3.9.9, JSZip 3.10.1, sql.js 1.14.2). Não trocar biblioteca nem adicionar dependência sem perguntar.
+- **Isolamento**: o preview roda em `iframe sandbox="allow-scripts allow-modals allow-forms"`, **nunca** com `allow-same-origin`. A IDE só aceita `postMessage` do iframe atual. Python, SQL e o modo JavaScript rodam em Web Workers. A saída do usuário entra no DOM só com `textContent`.
 - **Não simular** o que não existe (ex.: formatador Python). Limitação nova vai para a seção Limitações do README.
 - **Interface e comentários em português do Brasil.** Mensagens ao usuário: claras, sem jargão.
 - **Nada de `alert`/`confirm`/`prompt` nativos na IDE**: use `askConfirm()` de `js/confirm.js` (diálogo centralizado).

@@ -1,10 +1,11 @@
-# IDE Online — HTML, CSS, JavaScript e Python
+# IDE Online — HTML, CSS, JavaScript, Python e SQL
 
-IDE que roda inteira no navegador, sem build e sem backend. Três linguagens executam de verdade:
+IDE que roda inteira no navegador, sem build e sem backend. Quatro linguagens executam de verdade:
 
 - **HTML/CSS/JS**: página num preview isolado.
 - **JavaScript**: código sem página, saída no console (tipo Node), num Web Worker.
 - **Python**: Pyodide (CPython compilado para WebAssembly), num Web Worker.
+- **SQL**: SQLite (sql.js, compilado para WebAssembly), num Web Worker.
 
 ## Estrutura
 
@@ -29,6 +30,8 @@ IDE que roda inteira no navegador, sem build e sem backend. Três linguagens exe
 │   ├── preview.js      # monta o documento do preview e o iframe isolado
 │   ├── python.js       # cliente do worker Python (executar / parar)
 │   ├── py-worker.js    # Web Worker que carrega o Pyodide e roda o código
+│   ├── sql.js          # cliente do worker SQL (executar / parar)
+│   ├── sql-worker.js   # Web Worker que carrega o SQLite (sql.js) e roda o script
 │   ├── format.js       # formatação com Prettier
 │   ├── storage.js      # localStorage
 │   └── resizer.js      # divisores arrastáveis
@@ -63,10 +66,10 @@ Depois abra http://localhost:8765.
 | Renomear | duplo clique no nome (aba ou Explorer) ou ícone de lápis no Explorer |
 | Apagar arquivo | ícone de lixeira no Explorer (pede confirmação) |
 | Baixar arquivo atual | ícone de download na barra superior |
-| Baixar projeto | ícone de caixa no Explorer (gera `projeto-web.zip` ou `projeto-python.zip`) |
+| Baixar projeto | ícone de caixa no Explorer (gera `projeto-web.zip`, `projeto-python.zip`, `projeto-sql.zip` etc.) |
 | Importar | ícone de upload no Explorer: arquivos soltos ou um `.zip` |
 | Executar | botão **Executar** ou `Ctrl+Enter`. Encerra o que estiver rodando em outra linguagem (uma execução por vez) |
-| Parar | botão **Parar** (Python em execução ou preview aberto) |
+| Parar | botão **Parar** (Python, JavaScript ou SQL em execução, ou preview aberto) |
 | Recarregar preview | ícone ↻ no cabeçalho do Preview |
 | Formatar | ícone de linhas na barra superior ou `Shift+Alt+F` (HTML, CSS, JS) |
 | Limpar arquivo atual | ícone de lixeira na barra superior (apaga o conteúdo, não o arquivo) |
@@ -90,6 +93,7 @@ Cada linguagem tem seus próprios arquivos. A linguagem de cada arquivo vem da e
 | HTML/CSS/JS | `.html`, `.css`, `.js` |
 | JavaScript | `.js` |
 | Python | `.py`, `.txt`, `.csv`, `.json` |
+| SQL | `.sql` |
 
 Ao importar, um `.js` vai para a linguagem atual (se ela aceitar `.js`); senão, para HTML/CSS/JS.
 
@@ -127,6 +131,16 @@ Todos os arquivos do modo Python são gravados numa pasta antes de cada execuç�
 
 Pacotes incluídos na distribuição do Pyodide (numpy, pandas etc.) são baixados automaticamente quando aparecem num `import`.
 
+### SQL
+
+**Executar** roda o `main.sql` (ou o primeiro `.sql`) no SQLite, comando a comando. Cada execução começa com um **banco vazio, em memória**: o script precisa criar as tabelas e inserir os dados antes de consultar. O SQLite (~700 KB) é baixado na 1ª execução SQL.
+
+- Cada `SELECT` (ou outro comando que devolve linhas) aparece no console como tabela. São exibidas até 500 linhas por consulta; o total aparece abaixo da tabela.
+- `INSERT`, `UPDATE` e `DELETE` mostram quantas linhas foram afetadas; os demais comandos, `OK`.
+- `NULL` aparece em itálico; colunas BLOB aparecem como `<blob de N bytes>`.
+- No primeiro erro, a execução para e o console mostra a linha do comando, por exemplo `Erro na linha 4: near "SELEC": syntax error`.
+- Uma consulta sem fim (ex.: `WITH RECURSIVE` sem condição de parada) não trava a IDE: use **Parar**.
+
 ## Dependências
 
 Todas carregadas por CDN, sem instalação:
@@ -136,23 +150,24 @@ Todas carregadas por CDN, sem instalação:
 | [CodeMirror 5](https://codemirror.net/5/) (cdnjs) | 5.65.16 | `index.html`, `js/editor.js` | a IDE usa um `<textarea>` simples, sem destaque de sintaxe |
 | [Pyodide](https://pyodide.org/) (jsDelivr) | 314.0.7 (Python 3.14) | `js/py-worker.js`, carregado na 1ª execução Python | mensagem "Runtime Python indisponível"; HTML/CSS/JS continuam funcionando |
 | [Prettier](https://prettier.io/) (jsDelivr) | 3.9.9 | `js/format.js`, carregado no 1º uso do Formatar | mensagem de erro no console; o código não é alterado |
+| [sql.js](https://sql.js.org/) (jsDelivr) | 1.14.2 | `js/sql-worker.js`, carregado na 1ª execução SQL | mensagem "SQLite indisponível"; as outras linguagens continuam funcionando |
 | [JSZip](https://stuk.github.io/jszip/) (cdnjs) | 3.10.1 | `js/transfer.js`, carregado ao baixar ou importar `.zip` | mensagem de erro no console; baixar/importar arquivos soltos continua funcionando |
 
 ## Segurança
 
 - O preview roda num `iframe` com `sandbox="allow-scripts allow-modals allow-forms"` e **sem** `allow-same-origin`. O documento tem origem opaca: o código do usuário não acessa o DOM, os cookies nem o `localStorage` da IDE. A comunicação é só via `postMessage`, e a IDE só aceita mensagens do iframe atual.
-- Python e o modo JavaScript rodam em Web Workers: sem acesso ao DOM nem ao `localStorage` da IDE.
+- Python, SQL e o modo JavaScript rodam em Web Workers: sem acesso ao DOM nem ao `localStorage` da IDE.
 - A saída do usuário é inserida no console com `textContent`, nunca como HTML.
 
 ## Limitações
 
 - **Loop infinito no preview HTML/CSS/JS trava a aba** (no modo JavaScript, não: ele roda em worker). No Chrome, o iframe roda no mesmo processo da IDE, e o botão Parar não chega a responder. Para sair, recarregue a página: o código fica salvo e não é executado de novo sozinho. Em Python isso não acontece: o Parar funciona.
 - **`input()` em Python e `prompt()` sem `await` dependem do service worker** (ou, no caso do `input()`, de JSPI). O service worker só funciona com a IDE aberta por `localhost`, `127.0.0.1` ou HTTPS. Na primeira visita, se você executar antes de ele ativar (fração de segundo), recarregue a página.
-- **Não há formatação para Python** (nem para `.txt`, `.csv`, `.json`). O botão fica desabilitado nesses arquivos.
+- **Não há formatação para Python e SQL** (nem para `.txt`, `.csv`, `.json`). O botão fica desabilitado nesses arquivos.
 - **Sem subpastas.** Ao importar um `.zip`, os arquivos de subpastas entram pelo nome, sem a pasta. Extensões fora da lista são ignoradas, com aviso no console. Limite de 1 MB por arquivo.
 - **Modo JavaScript sem `alert()`, `confirm()` e DOM** (não há janela no worker). Pacotes npm (`import 'lodash'`) não estão disponíveis; só imports relativos entre arquivos do projeto, sem importação circular.
 - **Erro de sintaxe no modo JavaScript aparece sem número de linha.** O navegador não informa a posição de erros de sintaxe em módulos carregados por `import()`. Erros em tempo de execução mostram arquivo e linha.
-- **Só três linguagens.** Java, C, C++, PHP etc. exigiriam um runtime WebAssembly próprio para cada uma ou um servidor; por isso não aparecem na tela de escolha.
+- **Só quatro linguagens.** Java, C, C++, PHP etc. exigiriam um runtime WebAssembly próprio para cada uma ou um servidor; por isso não aparecem na tela de escolha.
 - **Uma página por vez no preview.** Links entre páginas `.html` do projeto não navegam no Preview.
 - **No preview, o código não busca outros arquivos do projeto.** `fetch('dados.json')` e `import` dentro de `<script type="module">` falham, porque o documento não tem endereço próprio (origem opaca). Os arquivos `.css` e `.js` entram embutidos na página; dados podem ir direto no `.js`. Formulários funcionam com `preventDefault()` no `submit`; um envio de verdade sai da página do preview (Executar a recria).
 - **Arquivos criados pelo código Python não ficam no projeto.** Eles existem durante a execução (dá para ler o que foi escrito), mas a pasta é recriada a partir do projeto na execução seguinte.
@@ -161,6 +176,8 @@ Todas carregadas por CDN, sem instalação:
 - **Não funciona offline**, porque as bibliotecas vêm de CDN.
 - **Um projeto por navegador**: o salvamento automático guarda um único projeto no `localStorage` deste navegador.
 - **O console guarda as últimas 1000 linhas.** Quando um programa imprime mais rápido do que dá para exibir (ex.: `while True: print(i)`), a saída é enviada em lotes e parte das linhas é omitida, com aviso `… N linhas omitidas`. Assim a IDE continua respondendo e o Parar funciona.
+- **SQL: o banco não persiste.** Cada execução recria o banco do zero; não há como abrir um arquivo `.db`/`.sqlite` nem importar `.csv` como tabela. Só um arquivo `.sql` é executado por vez (sem `.read` ou include entre arquivos).
+- **SQL é o dialeto do SQLite**, não MySQL nem PostgreSQL: tipos são flexíveis e alguns comandos (ex.: `ALTER TABLE ... ALTER COLUMN`, procedures) não existem.
 - O Parar do Python encerra o worker e descarta o runtime; ele é recarregado em segundo plano logo em seguida (alguns segundos).
 
 ## Testes manuais
@@ -255,3 +272,22 @@ print(f"Olá, {nome}! Ano que vem você terá {idade + 1}.")
 ```
 
 Esperado: dois campos de entrada no console, um de cada vez. Depois de responder, ficam as linhas `Seu nome: …` e `Idade: …` e a mensagem final. Digitar texto na idade gera `ValueError`, e o Parar durante a espera interrompe a execução.
+
+### SQL
+
+1. Escolha **SQL** e clique em Executar com o exemplo. Esperado: `CREATE: OK`, `INSERT: 3 linhas afetadas` e duas tabelas (alunos por nota; total 3 e média 8.23).
+
+```sql
+CREATE TABLE t (a);
+INSERT INTO t VALUES (1);
+
+SELEC * FROM t;
+```
+
+Esperado: `CREATE: OK`, `INSERT: 1 linha afetada` e `Erro na linha 4: near "SELEC": syntax error`, com status "Erro".
+
+```sql
+WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c) SELECT count(*) FROM c;
+```
+
+Esperado: o status fica "Executando…"; **Parar** interrompe e mostra `Execução SQL interrompida.`

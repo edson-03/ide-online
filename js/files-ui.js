@@ -10,6 +10,7 @@ const FILE_ICONS = {
   js: ['fi-js', 'JS'],
   python: ['fi-py', 'PY'],
   json: ['fi-json', '{}'],
+  sql: ['fi-sql', 'SQL'],
   text: ['fi-text', 'TXT'],
 };
 

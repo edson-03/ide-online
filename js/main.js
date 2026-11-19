@@ -6,6 +6,7 @@ import { createFilesUI } from './files-ui.js';
 import { createConsole } from './console.js';
 import { createPreview } from './preview.js';
 import { createPython } from './python.js';
+import { createSql } from './sql.js';
 import { canFormat, formatCode } from './format.js';
 import { loadState, saveState } from './storage.js';
 import { initResizers } from './resizer.js';
@@ -26,6 +27,7 @@ const btnDownload = $('btn-download');
 const STATUS_TEXT = {
   ready: 'Pronto',
   loading: 'Carregando runtime Python (~10 MB, só na 1ª vez)…',
+  sqlLoading: 'Carregando SQLite (~700 KB)…',
   running: 'Executando…',
   input: 'Aguardando entrada no console…',
   error: 'Erro',
@@ -90,6 +92,7 @@ const HINTS = {
   web: 'index.html é a página. CSS e JS do projeto são incluídos nela ao executar.',
   node: 'Executar roda o main.js, sem página (a saída vai para o console). Use import/export entre arquivos: import { f } from "./util.js".',
   python: 'Executar roda o main.py. Outros .py podem ser importados (import util) e arquivos .txt/.csv/.json lidos com open().',
+  sql: 'Executar roda o main.sql (SQLite) num banco vazio. O resultado de cada SELECT aparece como tabela no console.',
 };
 
 let shownMode = null; // modo exibido na última atualização da interface
@@ -243,6 +246,17 @@ const python = createPython({
   },
 });
 
+const sql = createSql({
+  onOutput: (level, text) => ideConsole.write(level, [text], 'sql'),
+  onBatch: (lines, dropped) => ideConsole.writeBatch(lines, 'sql', dropped),
+  onStatus: (state) => {
+    if (state === 'loading') {
+      ideConsole.info(STATUS_TEXT.sqlLoading);
+      setStatus('sqlLoading');
+    } else setStatus(state);
+  },
+});
+
 const jsRunner = createJsRunner({
   onOutput: (level, text) => ideConsole.write(level, [text], 'js'),
   onBatch: (lines, dropped) => ideConsole.writeBatch(lines, 'js', dropped),
@@ -257,13 +271,14 @@ const jsRunner = createJsRunner({
 
 let stoppedByUser = false;
 let jsStoppedByUser = false;
+let sqlStoppedByUser = false;
 let previewActive = false; // o iframe pode ter timers rodando; o Parar o encerra
 
 // O Parar fica ativo enquanto houver algo para encerrar.
-const updateStop = () => { btnStop.disabled = !(python.busy || previewActive || jsRunner.active); };
-// Executar só fica bloqueado no modo Python com Python rodando; nos outros modos ele encerra o Python.
+const updateStop = () => { btnStop.disabled = !(python.busy || sql.busy || previewActive || jsRunner.active); };
+// Executar só fica bloqueado no modo Python/SQL com ele rodando; nos outros modos ele encerra a execução.
 const updateRun = () => {
-  const busy = python.busy && project.mode === 'python';
+  const busy = (python.busy && project.mode === 'python') || (sql.busy && project.mode === 'sql');
   btnRun.disabled = busy;
   btnRun.classList.toggle('busy', busy);
   btnRun.querySelector('.label').textContent = busy ? 'Executando' : 'Executar';
@@ -322,6 +337,33 @@ async function runNode() {
   updateStop();
 }
 
+async function runSql() {
+  const files = fileData('sql');
+  const entry = files.find((f) => f.name === 'main.sql') ?? files[0];
+  if (!entry || !entry.content.trim()) {
+    ideConsole.warn(entry
+      ? `${entry.name} está vazio. Escreva algum código antes de executar.`
+      : 'O projeto SQL não tem nenhum arquivo .sql. Crie um main.sql.');
+    return;
+  }
+  ideConsole.info(entry.name === 'main.sql' ? 'Executando main.sql…' : `main.sql não encontrado. Executando ${entry.name}…`);
+  sqlStoppedByUser = false;
+  let ok = false;
+  try {
+    const run = sql.run(entry.content);
+    updateRun();
+    updateStop();
+    ok = await run;
+  } catch (err) {
+    ideConsole.error(`Não foi possível executar: ${err.message}`);
+  } finally {
+    updateRun();
+    updateStop();
+    // Se outra execução começou no lugar desta, ela cuida do status.
+    if (!jsRunner.busy && !python.busy && !sql.busy) setStatus(ok || sqlStoppedByUser ? 'ready' : 'error');
+  }
+}
+
 function runWeb() {
   const files = fileData('web');
   if (!files.some((f) => f.content.trim())) {
@@ -359,6 +401,10 @@ function stopOthers(mode) {
     stopPython();
     ideConsole.warn('Execução Python anterior interrompida.');
   }
+  if (mode !== 'sql' && sql.busy) {
+    sqlStoppedByUser = true;
+    sql.stop();
+  }
   if (mode !== 'node' && jsRunner.active) {
     jsStoppedByUser = true;
     jsRunner.stop();
@@ -374,6 +420,7 @@ btnRun.addEventListener('click', () => {
   stopOthers(project.mode);
   if (project.mode === 'python') runPython();
   else if (project.mode === 'node') runNode();
+  else if (project.mode === 'sql') runSql();
   else runWeb();
 });
 
@@ -388,6 +435,10 @@ btnStop.addEventListener('click', () => {
   if (python.busy) {
     stopPython();
     ideConsole.warn('Execução Python interrompida. O runtime está sendo recarregado em segundo plano.');
+  } else if (sql.busy) {
+    sqlStoppedByUser = true;
+    sql.stop();
+    ideConsole.warn('Execução SQL interrompida.');
   } else if (jsRunner.active && (project.mode === 'node' || !previewActive)) {
     jsStoppedByUser = true;
     jsRunner.stop();
@@ -462,6 +513,10 @@ $('btn-new').addEventListener('click', async () => {
     ideConsole.cancelPrompt();
   }
   if (project.mode === 'web') stopPreview();
+  if (project.mode === 'sql' && sql.busy) {
+    sqlStoppedByUser = true;
+    sql.stop();
+  }
   updateRun();
   updateStop();
   project.reset();
@@ -492,7 +547,7 @@ importInput.addEventListener('change', async () => {
   }
   for (const { name, reason } of result.skipped) ideConsole.warn(`Ignorado: ${name} (${reason}).`);
   if (!result.files.length) {
-    ideConsole.warn('Nenhum arquivo importado. Extensões aceitas: .html, .css, .js, .py, .txt, .csv, .json ou um .zip com eles.');
+    ideConsole.warn('Nenhum arquivo importado. Extensões aceitas: .html, .css, .js, .py, .txt, .csv, .json, .sql ou um .zip com eles.');
     return;
   }
 

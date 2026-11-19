@@ -293,6 +293,7 @@ button { font: inherit; color: inherit; }
 .fi-js { color: #c9a800; }
 .fi-py { color: #3572a5; }
 .fi-json { color: #8a6d00; }
+.fi-sql { color: #0f80cc; font-size: 8px; }
 .fi-text { color: var(--text-dim); font-size: 8px; }
 
 /* Área editor | preview */
@@ -712,6 +713,23 @@ body.resizing iframe { pointer-events: none; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Resultado de SELECT (modo SQL). */
+.console-table-wrap { min-width: 0; overflow-x: auto; }
+.console-table {
+  border-collapse: collapse;
+  margin: 2px 0;
+}
+.console-table th,
+.console-table td {
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  text-align: left;
+  white-space: pre;
+}
+.console-table th { background: var(--bg-2); font-weight: 600; }
+.console-table td.null { color: var(--text-dim); font-style: italic; }
+.console-table-note { color: var(--text-dim); font-size: 11px; }
 
 .console-prompt { border-left-color: var(--accent); }
 

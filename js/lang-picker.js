@@ -16,12 +16,18 @@ export const LANG_ICONS = {
     <path fill="#f16529" d="M16 5v22.8l7.1-2L25 5z"/>
     <path fill="#fff" d="M10 8h12l-.3 3H13.3l.2 3H21.4l-.7 7.8L16 23.1l-4.7-1.3-.3-3.6h3l.2 1.6 1.8.5 1.8-.5.3-3H10.6z"/>
   </svg>`,
+  sql: `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path fill="#0f80cc" d="M5 7c0-2.2 4.9-4 11-4s11 1.8 11 4v18c0 2.2-4.9 4-11 4S5 27.2 5 25z"/>
+    <ellipse cx="16" cy="7" rx="11" ry="4" fill="#5cb8f0"/>
+    <path fill="none" stroke="#fff" stroke-width="1.5" opacity=".7" d="M5 13c0 2.2 4.9 4 11 4s11-1.8 11-4M5 19c0 2.2 4.9 4 11 4s11-1.8 11-4"/>
+  </svg>`,
 };
 
 const CHOICES = [
   { mode: 'python', name: 'Python', group: 'Linguagens de programação', keywords: 'py python3 pyodide' },
   { mode: 'node', name: 'JavaScript', group: 'Linguagens de programação', keywords: 'js node nodejs console es6 ecmascript' },
   { mode: 'web', name: 'HTML/CSS/JS', group: 'Web', keywords: 'html css javascript web site página pagina frontend' },
+  { mode: 'sql', name: 'SQL', group: 'Banco de dados', keywords: 'sqlite banco de dados database db query consulta tabela' },
 ];
 
 const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

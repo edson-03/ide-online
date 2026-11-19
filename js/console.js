@@ -1,6 +1,6 @@
 // Painel de console da IDE. Recebe mensagens do preview (JS), do Python e da própria IDE.
 
-const SOURCE_LABEL = { js: 'JS', python: 'Python', system: 'IDE' };
+const SOURCE_LABEL = { js: 'JS', python: 'Python', sql: 'SQL', system: 'IDE' };
 
 // Evita que um loop de print/console.log trave a página com milhares de nós.
 const MAX_LINES = 1000;
@@ -36,6 +36,42 @@ export function createConsole(outputEl, { onCount } = {}) {
     return line;
   }
 
+  // Resultado de um SELECT: { columns, rows, more } (more = linhas não enviadas).
+  function makeTable({ columns, rows, more }, source) {
+    const line = makeLine('log', '', source);
+    const body = line.querySelector('.console-text');
+    body.classList.add('console-table-wrap');
+    const table = document.createElement('table');
+    table.className = 'console-table';
+    const head = table.createTHead().insertRow();
+    for (const c of columns) {
+      const th = document.createElement('th');
+      th.textContent = c;
+      head.appendChild(th);
+    }
+    const tbody = table.createTBody();
+    for (const r of rows) {
+      const tr = tbody.insertRow();
+      for (const v of r) {
+        const td = tr.insertCell();
+        if (v === null) {
+          td.textContent = 'NULL';
+          td.className = 'null';
+        } else {
+          td.textContent = v;
+        }
+      }
+    }
+    const total = rows.length + more;
+    const note = document.createElement('div');
+    note.className = 'console-table-note';
+    note.textContent = more
+      ? `${total} linhas (mostrando as primeiras ${rows.length})`
+      : total === 0 ? 'Nenhuma linha.' : `${total} ${total === 1 ? 'linha' : 'linhas'}`;
+    body.append(table, note);
+    return line;
+  }
+
   // Acrescenta várias linhas de uma vez: uma única medição de layout e um único aviso.
   function append(lines) {
     // Só rola automaticamente se o usuário já estava no fim.
@@ -56,7 +92,9 @@ export function createConsole(outputEl, { onCount } = {}) {
   function writeBatch(lines, source, dropped = 0) {
     const nodes = [];
     if (dropped) nodes.push(makeLine('warn', `… ${dropped} linhas omitidas (saída rápida demais para exibir)`, 'system'));
-    for (const { level, text } of lines) nodes.push(makeLine(level, text, source));
+    for (const { level, text } of lines) {
+      nodes.push(level === 'table' ? makeTable(text, source) : makeLine(level, text, source));
+    }
     append(nodes);
   }
 

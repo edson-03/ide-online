@@ -11,6 +11,7 @@ const CM_MODES = {
   js: 'javascript',
   python: 'python',
   json: { name: 'javascript', json: true },
+  sql: 'text/x-sqlite',
   text: null,
 };
 
